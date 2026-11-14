@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: tunescope-backend
+    env: node
+    plan: starter
+    buildCommand: npm install && npm run build --workspace=shared && npm run build --workspace=backend && npx prisma migrate deploy --schema=backend/prisma/schema.prisma
+    startCommand: npm run start --workspace=backend
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tunescope-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: SPOTIFY_CLIENT_ID
+        sync: false
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+      - key: SPOTIFY_REDIRECT_URI
+        sync: false
+
+databases:
+  - name: tunescope-db
+    plan: standard
+    databaseName: tunescope
+    user: tunescope_user
