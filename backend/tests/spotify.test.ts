@@ -108,7 +108,7 @@ describe('Spotify Provider & Routes', () => {
       .set('Host', '127.0.0.1:5000');
 
     expect(res.status).toBe(302);
-    expect(res.headers.location).toContain('127.0.0.1:5173/settings');
+    expect(res.headers.location).toContain('127.0.0.1:5173/profile');
     expect(res.headers.location).toContain('spotify=error');
     expect(res.headers.location).toContain('access_denied');
   });

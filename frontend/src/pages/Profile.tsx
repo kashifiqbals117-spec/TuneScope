@@ -11,8 +11,11 @@ import {
   Check,
   X,
   Save,
+  AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
+import { useSpotify } from '../context/SpotifyContext.js';
 import { useToast } from '../context/ToastContext.js';
 import { apiFetch } from '../utils/api.js';
 import { AnalyticsSummary, PrivacySetting } from '@tunescope/shared';
@@ -25,11 +28,17 @@ import { CardSkeleton, ChartSkeleton } from '../components/common/Skeleton.js';
 
 export const Profile: React.FC = () => {
   const { user, updateProfile } = useAuth();
+  const { status: spotifyStatus, checkStatus: refreshSpotifyStatus, connectSpotify } = useSpotify();
   const toast = useToast();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<any>(null);
+  const [spotifyFeedback, setSpotifyFeedback] = useState<{
+    type: 'success' | 'warning' | 'error';
+    title: string;
+    message: string;
+  } | null>(null);
 
   // Edit fields
   const [displayName, setDisplayName] = useState(user?.displayName || '');
@@ -39,6 +48,45 @@ export const Profile: React.FC = () => {
     user?.privacySetting || PrivacySetting.PUBLIC
   );
   const [isSaving, setIsSaving] = useState(false);
+
+  // Check URL params for OAuth callback return
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const spotifyParam = params.get('spotify');
+    const messageParam = params.get('message');
+
+    if (spotifyParam) {
+      refreshSpotifyStatus();
+
+      if (spotifyParam === 'connected') {
+        setSpotifyFeedback({
+          type: 'success',
+          title: 'Spotify Connected Successfully!',
+          message: 'Your Spotify account has been successfully verified and connected to your TuneScope profile.',
+        });
+        toast.success('Spotify account linked and verified!');
+      } else if (spotifyParam === 'restricted') {
+        setSpotifyFeedback({
+          type: 'warning',
+          title: 'Spotify Access Restricted',
+          message:
+            messageParam ||
+            'Spotify credentials authorized, but Web API access returned HTTP 403. In Development Mode, your Spotify account email must be added under User Management in the Spotify Developer Dashboard.',
+        });
+        toast.warning('Spotify authorized, but API access is restricted');
+      } else if (spotifyParam === 'error') {
+        setSpotifyFeedback({
+          type: 'error',
+          title: 'Spotify Authorization Issue',
+          message: messageParam || 'Spotify authorization was denied or timed out.',
+        });
+        toast.error(messageParam || 'Spotify authorization was cancelled or failed');
+      }
+
+      // Clean up query parameters from browser address bar
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   const loadSummary = async () => {
     try {
@@ -106,6 +154,37 @@ export const Profile: React.FC = () => {
     <div className="space-y-6 sm:space-y-8 animate-fade-in max-w-7xl mx-auto">
       {error && <ErrorMessage error={error} onRetry={loadSummary} />}
 
+      {/* Spotify OAuth Feedback Banner */}
+      {spotifyFeedback && (
+        <div
+          className={`p-4 rounded-2xl border flex items-start justify-between gap-3 animate-fade-in ${
+            spotifyFeedback.type === 'success'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+              : spotifyFeedback.type === 'warning'
+              ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            {spotifyFeedback.type === 'success' ? (
+              <Check className="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+            )}
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-white">{spotifyFeedback.title}</h4>
+              <p className="text-xs opacity-90 leading-relaxed">{spotifyFeedback.message}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setSpotifyFeedback(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header Profile Card */}
       <div className="relative overflow-hidden rounded-3xl p-6 sm:p-8 bg-dark-900 border border-white/[0.08] shadow-2xl">
         <div className="absolute top-0 right-0 w-64 h-64 bg-brand-violet/10 rounded-full blur-3xl pointer-events-none" />
@@ -138,11 +217,31 @@ export const Profile: React.FC = () => {
               {user?.bio || 'Music enthusiast exploring sonic boundaries.'}
             </p>
 
-            <div className="pt-2">
+            <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2">
               <span className="text-xs font-bold text-brand-emerald bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 inline-flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5" />
                 Persona: {user?.persona || 'The Cosmic Explorer'}
               </span>
+
+              {spotifyStatus?.isConnected && spotifyStatus?.verified ? (
+                <span className="text-xs font-semibold text-emerald-400 bg-emerald-950/40 px-3 py-1 rounded-full border border-emerald-500/30 inline-flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" />
+                  Spotify: {spotifyStatus.spotifyUser?.displayName || 'Connected'}
+                </span>
+              ) : spotifyStatus?.hasStoredCredentials && !spotifyStatus?.isConnected ? (
+                <span className="text-xs font-semibold text-amber-400 bg-amber-950/40 px-3 py-1 rounded-full border border-amber-500/30 inline-flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Spotify: Restricted (403)
+                </span>
+              ) : (
+                <button
+                  onClick={() => connectSpotify('/profile')}
+                  className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 bg-white/5 hover:bg-white/10 px-3 py-1 rounded-full border border-white/10 transition-colors inline-flex items-center gap-1.5"
+                >
+                  <Music2 className="w-3.5 h-3.5 text-emerald-400" />
+                  Connect Spotify
+                </button>
+              )}
             </div>
           </div>
 
