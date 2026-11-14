@@ -1,0 +1,197 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String               @id @default(uuid())
+  email           String               @unique
+  passwordHash    String
+  username        String               @unique
+  displayName     String
+  avatarUrl       String?
+  bio             String?
+  persona         String?
+  privacySetting  String               @default("PUBLIC") // PUBLIC, FRIENDS_ONLY, PRIVATE
+  connections     ProviderConnection[]
+  listeningEvents ListeningEvent[]
+  sentRequests    Friendship[]         @relation("SentRequests")
+  receivedRequests Friendship[]        @relation("ReceivedRequests")
+  groupMemberships FriendGroupMember[]
+  createdGroups   FriendGroup[]        @relation("CreatedGroups")
+  songReactions   SongReaction[]
+  recaps          Recap[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([email])
+  @@index([username])
+}
+
+model ProviderConnection {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       String    // "spotify"
+  providerUserId String?
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  scope          String?
+  isConnected    Boolean   @default(true)
+  lastSyncedAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, provider])
+}
+
+model Artist {
+  id          String   @id @default(uuid())
+  providerId  String?  @unique
+  name        String
+  genres      String[]
+  imageUrl    String?
+  popularity  Int?
+  followers   Int?
+  externalUrl String?
+  albums      Album[]
+  tracks      Track[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Album {
+  id          String   @id @default(uuid())
+  providerId  String?  @unique
+  title       String
+  artistId    String
+  artist      Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  releaseDate String?
+  totalTracks Int?
+  coverUrl    String?
+  genres      String[]
+  tracks      Track[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([title])
+}
+
+model Track {
+  id              String           @id @default(uuid())
+  providerId      String?          @unique
+  title           String
+  artistId        String
+  artist          Artist           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  albumId         String?
+  album           Album?           @relation(fields: [albumId], references: [id], onDelete: SetNull)
+  durationMs      Int
+  explicit        Boolean          @default(false)
+  previewUrl      String?
+  coverUrl        String?
+  popularity      Int?
+  danceability    Float?
+  energy          Float?
+  valence         Float?
+  acousticness    Float?
+  tempo           Float?
+  listeningEvents ListeningEvent[]
+  reactions       SongReaction[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([title])
+  @@index([artistId])
+}
+
+model ListeningEvent {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackId        String
+  track          Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  playedAt       DateTime
+  durationMs     Int
+  completionRate Float    @default(1.0)
+  source         String   @default("demo") // spotify, demo, import, manual
+  deviceType     String?
+  createdAt      DateTime @default(now())
+
+  @@index([userId, playedAt])
+  @@index([trackId])
+}
+
+model Friendship {
+  id         String   @id @default(uuid())
+  senderId   String
+  sender     User     @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User     @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+  status     String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([senderId, receiverId])
+}
+
+model FriendGroup {
+  id          String              @id @default(uuid())
+  name        String
+  description String?
+  creatorId   String
+  creator     User                @relation("CreatedGroups", fields: [creatorId], references: [id], onDelete: Cascade)
+  members     FriendGroupMember[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model FriendGroupMember {
+  id       String      @id @default(uuid())
+  groupId  String
+  group    FriendGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime    @default(now())
+
+  @@unique([groupId, userId])
+}
+
+model SongReaction {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackId      String
+  track        Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  reactionType String   // FIRE, LOVE, REPEAT, VIBE, MIND_BLOWN
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, trackId, reactionType])
+  @@index([trackId])
+}
+
+model Recap {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // WEEKLY, YEARLY
+  year        Int?
+  weekNumber  Int?
+  title       String
+  summaryData Json
+  slides      Json
+  isShareable Boolean  @default(true)
+  shareToken  String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, type])
+  @@index([shareToken])
+}
+
