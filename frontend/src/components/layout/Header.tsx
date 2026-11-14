@@ -17,7 +17,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
       <div className="flex items-center gap-4">
         <button
           onClick={onOpenMobileMenu}
-          className="lg:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5"
+          aria-label="Open mobile navigation"
+          className="lg:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition"
         >
           <Menu className="w-5 h-5" />
         </button>

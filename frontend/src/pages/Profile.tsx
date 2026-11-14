@@ -9,20 +9,27 @@ import {
   Compass,
   Disc3,
   Check,
+  X,
+  Save,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
+import { useToast } from '../context/ToastContext.js';
 import { apiFetch } from '../utils/api.js';
 import { AnalyticsSummary, PrivacySetting } from '@tunescope/shared';
 import { GlassCard } from '../components/common/GlassCard.js';
 import { Button } from '../components/common/Button.js';
 import { Badge } from '../components/common/Badge.js';
 import { GenreRadar } from '../components/charts/GenreRadar.js';
+import { ErrorMessage } from '../components/common/ErrorMessage.js';
+import { CardSkeleton, ChartSkeleton } from '../components/common/Skeleton.js';
 
 export const Profile: React.FC = () => {
   const { user, updateProfile } = useAuth();
+  const toast = useToast();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [error, setError] = useState<any>(null);
 
   // Edit fields
   const [displayName, setDisplayName] = useState(user?.displayName || '');
@@ -31,40 +38,42 @@ export const Profile: React.FC = () => {
   const [privacySetting, setPrivacySetting] = useState<PrivacySetting>(
     user?.privacySetting || PrivacySetting.PUBLIC
   );
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const loadSummary = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await apiFetch<AnalyticsSummary>('/analytics/summary?period=all');
+      setSummary(data);
+    } catch (err: any) {
+      console.error('Failed to load profile summary:', err);
+      setError(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadSummary() {
-      try {
-        setIsLoading(true);
-        const data = await apiFetch<AnalyticsSummary>('/analytics/summary?period=all');
-        setSummary(data);
-      } catch (err) {
-        console.error('Failed to load profile summary:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
     loadSummary();
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      setSaveStatus(null);
+      setIsSaving(true);
       await updateProfile({
         displayName,
         bio,
         avatarUrl,
         privacySetting,
       });
-      setSaveStatus('Profile updated successfully!');
-      setTimeout(() => {
-        setIsEditing(false);
-        setSaveStatus(null);
-      }, 1200);
+      toast.success('Profile updated successfully!');
+      setIsEditing(false);
     } catch (err: any) {
-      setSaveStatus(err.message || 'Failed to update profile');
+      toast.error(err.message || 'Failed to update profile');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -73,11 +82,33 @@ export const Profile: React.FC = () => {
     value: Math.min(100, g.percentage * 2.5),
   }));
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+        <div className="p-8 rounded-3xl bg-dark-900 border border-white/5 space-y-4">
+          <div className="h-20 w-20 rounded-full bg-white/5 animate-pulse" />
+          <div className="h-8 w-48 bg-white/5 rounded-xl animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ChartSkeleton />
+          <CardSkeleton />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6 sm:space-y-8 animate-fade-in max-w-7xl mx-auto">
+      {error && <ErrorMessage error={error} onRetry={loadSummary} />}
+
       {/* Header Profile Card */}
-      <div className="relative overflow-hidden rounded-3xl p-8 bg-gradient-to-r from-dark-900 via-dark-850 to-dark-900 border border-white/10 shadow-2xl">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-violet/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-3xl p-6 sm:p-8 bg-dark-900 border border-white/[0.08] shadow-2xl">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-violet/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
           <img
@@ -86,12 +117,14 @@ export const Profile: React.FC = () => {
               'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200'
             }
             alt={user?.displayName}
-            className="w-24 h-24 rounded-full object-cover ring-4 ring-white/10 shadow-xl"
+            className="w-24 h-24 rounded-full object-cover ring-2 ring-white/10 shadow-xl flex-shrink-0"
           />
 
-          <div className="space-y-2 flex-1">
+          <div className="space-y-2 flex-1 min-w-0">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <h1 className="text-3xl font-extrabold text-white">{user?.displayName}</h1>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white truncate">
+                {user?.displayName}
+              </h1>
               <Badge variant="emerald" size="sm">
                 @{user?.username}
               </Badge>
@@ -101,7 +134,7 @@ export const Profile: React.FC = () => {
               </Badge>
             </div>
 
-            <p className="text-sm text-slate-300 max-w-lg">
+            <p className="text-xs sm:text-sm text-slate-300 max-w-lg">
               {user?.bio || 'Music enthusiast exploring sonic boundaries.'}
             </p>
 
@@ -132,8 +165,8 @@ export const Profile: React.FC = () => {
               <span className="text-xs font-semibold text-slate-400">Lifetime Hours</span>
               <Clock className="w-4 h-4 text-brand-emerald" />
             </div>
-            <p className="text-3xl font-extrabold text-white mt-3">
-              {summary.duration.totalHours} <span className="text-sm font-semibold text-slate-400">hrs</span>
+            <p className="text-2xl sm:text-3xl font-extrabold text-white mt-3">
+              {summary.duration.totalHours} <span className="text-xs font-normal text-slate-400">hrs</span>
             </p>
             <p className="text-xs text-slate-400 mt-1">Across all synced sources</p>
           </GlassCard>
@@ -143,7 +176,7 @@ export const Profile: React.FC = () => {
               <span className="text-xs font-semibold text-slate-400">Total Scrobbles</span>
               <Music2 className="w-4 h-4 text-brand-cyan" />
             </div>
-            <p className="text-3xl font-extrabold text-white mt-3">
+            <p className="text-2xl sm:text-3xl font-extrabold text-white mt-3">
               {summary.duration.totalPlays.toLocaleString()}
             </p>
             <p className="text-xs text-slate-400 mt-1">Tracks completed</p>
@@ -154,8 +187,8 @@ export const Profile: React.FC = () => {
               <span className="text-xs font-semibold text-slate-400">Diversity Index</span>
               <Compass className="w-4 h-4 text-brand-violet" />
             </div>
-            <p className="text-3xl font-extrabold text-brand-violet mt-3">
-              {summary.diversity.diversityScore}/100
+            <p className="text-2xl sm:text-3xl font-extrabold text-brand-violet mt-3">
+              {summary.diversity.diversityScore}<span className="text-xs font-normal text-slate-400">/100</span>
             </p>
             <p className="text-xs text-slate-400 mt-1">Multi-genre audio DNA</p>
           </GlassCard>
@@ -189,7 +222,7 @@ export const Profile: React.FC = () => {
                   <span>{genre.genre}</span>
                   <span className="text-brand-emerald">{genre.percentage}%</span>
                 </div>
-                <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
+                <div className="w-full bg-white/[0.05] h-2 rounded-full overflow-hidden">
                   <div
                     className="bg-gradient-to-r from-brand-emerald to-brand-cyan h-full rounded-full"
                     style={{ width: `${genre.percentage}%` }}
@@ -203,80 +236,78 @@ export const Profile: React.FC = () => {
 
       {/* Edit Profile Modal */}
       {isEditing && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-dark-900 border border-white/10 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">Edit Profile</h3>
-              <button onClick={() => setIsEditing(false)} className="text-slate-400 hover:text-white">
-                ✕
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <form
+            onSubmit={handleSave}
+            className="bg-dark-900 border border-white/10 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+              <h3 className="text-base font-bold text-white">Edit Profile</h3>
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="text-xs text-slate-300 font-semibold mb-1 block">Display Name</label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full bg-dark-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-emerald"
-                  required
-                />
-              </div>
+            <div>
+              <label className="text-xs text-slate-300 font-semibold mb-1 block">Display Name</label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="w-full bg-dark-950 border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-emerald"
+              />
+            </div>
 
-              <div>
-                <label className="text-xs text-slate-300 font-semibold mb-1 block">Bio</label>
-                <textarea
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  rows={3}
-                  className="w-full bg-dark-950 border border-white/10 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-brand-emerald"
-                />
-              </div>
+            <div>
+              <label className="text-xs text-slate-300 font-semibold mb-1 block">Bio</label>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                rows={3}
+                placeholder="Share your musical philosophy..."
+                className="w-full bg-dark-950 border border-white/[0.08] rounded-xl p-3 text-xs text-white focus:outline-none focus:border-brand-emerald"
+              />
+            </div>
 
-              <div>
-                <label className="text-xs text-slate-300 font-semibold mb-1 block">Avatar URL</label>
-                <input
-                  type="url"
-                  value={avatarUrl}
-                  onChange={(e) => setAvatarUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-dark-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-emerald"
-                />
-              </div>
+            <div>
+              <label className="text-xs text-slate-300 font-semibold mb-1 block">Avatar URL</label>
+              <input
+                type="text"
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+                placeholder="https://images.unsplash.com/..."
+                className="w-full bg-dark-950 border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-emerald"
+              />
+            </div>
 
-              <div>
-                <label className="text-xs text-slate-300 font-semibold mb-1 block">Privacy Setting</label>
-                <select
-                  value={privacySetting}
-                  onChange={(e) => setPrivacySetting(e.target.value as PrivacySetting)}
-                  className="w-full bg-dark-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-emerald"
-                >
-                  <option value={PrivacySetting.PUBLIC}>Public (Visible to everyone)</option>
-                  <option value={PrivacySetting.FRIENDS_ONLY}>Friends Only</option>
-                  <option value={PrivacySetting.PRIVATE}>Private</option>
-                </select>
-              </div>
+            <div>
+              <label className="text-xs text-slate-300 font-semibold mb-1 block">Privacy Setting</label>
+              <select
+                value={privacySetting}
+                onChange={(e) => setPrivacySetting(e.target.value as PrivacySetting)}
+                className="w-full bg-dark-950 border border-white/[0.08] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-emerald"
+              >
+                <option value={PrivacySetting.PUBLIC}>Public Profile</option>
+                <option value={PrivacySetting.FRIENDS_ONLY}>Friends Only</option>
+                <option value={PrivacySetting.PRIVATE}>Private</option>
+              </select>
+            </div>
 
-              {saveStatus && (
-                <p className="text-xs text-brand-emerald bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20">
-                  {saveStatus}
-                </p>
-              )}
-
-              <div className="flex justify-end gap-3 pt-2">
-                <Button variant="ghost" onClick={() => setIsEditing(false)}>
-                  Cancel
-                </Button>
-                <Button variant="primary" type="submit">
-                  Save Changes
-                </Button>
-              </div>
-            </form>
-          </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-white/[0.06]">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" size="sm" isLoading={isSaving} icon={<Save className="w-3.5 h-3.5" />}>
+                Save Changes
+              </Button>
+            </div>
+          </form>
         </div>
       )}
     </div>
   );
 };
-

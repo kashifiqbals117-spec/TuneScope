@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { env } from './config/env.js';
+import { prisma } from './db/prisma.js';
 import { apiLimiter } from './middleware/rateLimit.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './modules/auth/auth.routes.js';
@@ -13,13 +14,30 @@ import { musicRouter } from './modules/music/music.routes.js';
 export function createServer() {
   const app = express();
 
+  // Security Headers Middleware
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    next();
+  });
+
   // CORS Configuration
   app.use(
     cors({
       origin: (origin, callback) => {
         // Allow requests with no origin (like mobile apps, curl, or server-to-server)
         if (!origin) return callback(null, true);
-        if (env.CORS_ORIGINS.includes(origin) || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+        if (
+          env.CORS_ORIGINS.includes(origin) ||
+          origin.startsWith('http://localhost:') ||
+          origin.startsWith('http://127.0.0.1:') ||
+          origin.endsWith('.vercel.app')
+        ) {
           return callback(null, true);
         }
         return callback(new Error('CORS policy: origin not allowed.'));
@@ -34,18 +52,33 @@ export function createServer() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // Global Rate Limiting
+  // Global Rate Limiting on API endpoints
   app.use('/api/', apiLimiter);
 
-  // Healthcheck endpoint
-  app.get('/api/health', (_req, res) => {
-    res.json({
-      status: 'healthy',
-      app: 'TuneScope API',
-      timestamp: new Date().toISOString(),
-      version: '1.0.0',
-    });
-  });
+  // Healthcheck handler verifying live database connectivity
+  const healthHandler = async (_req: express.Request, res: express.Response) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({
+        status: 'healthy',
+        app: 'TuneScope API',
+        database: 'connected',
+        timestamp: new Date().toISOString(),
+        version: '1.0.0',
+      });
+    } catch {
+      res.status(503).json({
+        status: 'unhealthy',
+        app: 'TuneScope API',
+        database: 'disconnected',
+        timestamp: new Date().toISOString(),
+        version: '1.0.0',
+      });
+    }
+  };
+
+  app.get('/health', healthHandler);
+  app.get('/api/health', healthHandler);
 
   // Mount API modules
   app.use('/api/auth', authRouter);
@@ -60,4 +93,3 @@ export function createServer() {
 
   return app;
 }
-

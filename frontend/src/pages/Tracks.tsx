@@ -1,35 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { Music2, Play, Pause, Search, Disc3, Sparkles } from 'lucide-react';
+import { Music2, Play, Pause, Search, Disc3, Sparkles, X, Trophy } from 'lucide-react';
 import { apiFetch } from '../utils/api.js';
 import { TrackFrequency } from '@tunescope/shared';
 import { GlassCard } from '../components/common/GlassCard.js';
-import { Badge } from '../components/common/Badge.js';
 import { AudioPlayerPreview } from '../components/common/AudioPlayerPreview.js';
+import { EmptyState } from '../components/common/EmptyState.js';
+import { ErrorMessage } from '../components/common/ErrorMessage.js';
+import { CardSkeleton } from '../components/common/Skeleton.js';
 
 export const Tracks: React.FC = () => {
   const [tracks, setTracks] = useState<TrackFrequency[]>([]);
   const [period, setPeriod] = useState<'all' | 'year' | 'month' | 'week'>('all');
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<any>(null);
   const [selectedTrack, setSelectedTrack] = useState<TrackFrequency | null>(null);
 
-  useEffect(() => {
-    async function loadTracks() {
-      try {
-        setIsLoading(true);
-        const data = await apiFetch<{ tracks: TrackFrequency[] }>(
-          `/analytics/tracks?period=${period}`
-        );
-        setTracks(data.tracks);
-        if (data.tracks.length > 0 && !selectedTrack) {
-          setSelectedTrack(data.tracks[0]);
-        }
-      } catch (err) {
-        console.error('Failed to load tracks:', err);
-      } finally {
-        setIsLoading(false);
+  const loadTracks = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await apiFetch<{ tracks: TrackFrequency[] }>(
+        `/analytics/tracks?period=${period}`
+      );
+      setTracks(data.tracks || []);
+      if (data.tracks && data.tracks.length > 0 && !selectedTrack) {
+        setSelectedTrack(data.tracks[0]);
       }
+    } catch (err: any) {
+      console.error('Failed to load tracks:', err);
+      setError(err);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  useEffect(() => {
     loadTracks();
   }, [period]);
 
@@ -39,18 +45,27 @@ export const Tracks: React.FC = () => {
       t.artistName.toLowerCase().includes(search.toLowerCase())
   );
 
+  const formatDuration = (ms: number) => {
+    if (!ms || ms <= 0) return '0:00';
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
       {/* Header & Filter Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">Top Tracks</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            The definitive anthems, hooks, and melodies dominating your audio space.
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Top Anthems</h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            The defining hooks, melodies, and anthems dominating your streaming activity.
           </p>
         </div>
 
-        <div className="flex bg-dark-900 border border-white/10 rounded-xl p-1 gap-1 self-start sm:self-auto">
+        {/* Time Period Selector */}
+        <div className="flex bg-dark-900 border border-white/[0.08] rounded-xl p-1 gap-1 self-start sm:self-auto">
           {(['all', 'year', 'month', 'week'] as const).map((p) => (
             <button
               key={p}
@@ -68,13 +83,15 @@ export const Tracks: React.FC = () => {
       </div>
 
       {/* Floating Audio Preview Player */}
-      {selectedTrack && (
-        <GlassCard className="p-4 bg-gradient-to-r from-dark-900 to-dark-850 flex flex-wrap items-center justify-between gap-4 border-brand-emerald/30 shadow-glow-emerald">
+      {selectedTrack && !isLoading && (
+        <GlassCard className="p-4 bg-dark-900 border-white/[0.1] flex flex-wrap items-center justify-between gap-4 shadow-xl">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-brand-emerald bg-brand-emerald/10 px-2.5 py-1 rounded-lg">
-              Active Preview
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-emerald bg-brand-emerald/10 border border-brand-emerald/20 px-2.5 py-1 rounded-lg">
+              Preview Player
             </span>
-            <span className="text-xs text-slate-300">Click any anthem to listen</span>
+            <span className="text-xs text-slate-300 truncate max-w-xs sm:max-w-md">
+              Now cueing: <strong>{selectedTrack.title}</strong> by {selectedTrack.artistName}
+            </span>
           </div>
 
           <AudioPlayerPreview
@@ -94,84 +111,112 @@ export const Tracks: React.FC = () => {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Filter tracks by title or artist..."
-          className="w-full bg-dark-900 border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-emerald/50 transition"
+          className="w-full bg-dark-900 border border-white/[0.08] rounded-2xl pl-11 pr-10 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-emerald/50 transition"
         />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
+            aria-label="Clear search"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
-      {/* Tracks List */}
-      <GlassCard className="p-0 overflow-hidden">
-        {isLoading ? (
-          <div className="py-24 text-center">
-            <Disc3 className="w-10 h-10 text-brand-emerald animate-spin mx-auto mb-3" />
-            <p className="text-sm text-slate-400 font-medium">Crunching your top anthems...</p>
-          </div>
-        ) : filteredTracks.length === 0 ? (
-          <div className="py-20 text-center text-slate-400">
-            <Music2 className="w-10 h-10 mx-auto mb-2 text-slate-600" />
-            <p className="text-sm font-semibold">No tracks found</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-white/5">
-            {filteredTracks.map((track) => (
-              <div
+      {error && <ErrorMessage error={error} onRetry={loadTracks} />}
+
+      {/* Tracks Grid & List */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+      ) : filteredTracks.length === 0 ? (
+        <EmptyState
+          icon={Music2}
+          title={search ? 'No tracks match your query' : 'No track data recorded'}
+          description={
+            search
+              ? `No tracks or artists matched "${search}". Try checking the spelling or reset your query.`
+              : 'Connect Spotify or import listening records to see your top songs ranked.'
+          }
+          actionText={search ? 'Clear Search' : 'Go to Settings'}
+          onAction={() => (search ? setSearch('') : (window.location.href = '/settings'))}
+        />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredTracks.map((track) => {
+            const isSelected = selectedTrack?.trackId === track.trackId;
+            const rankBadgeColor =
+              track.rank === 1
+                ? 'bg-amber-400 text-black border-amber-300'
+                : track.rank === 2
+                ? 'bg-slate-200 text-black border-slate-100'
+                : track.rank === 3
+                ? 'bg-amber-600 text-white border-amber-500'
+                : 'bg-dark-800 text-slate-400 border-white/10';
+
+            return (
+              <GlassCard
                 key={track.trackId}
+                hoverEffect
                 onClick={() => setSelectedTrack(track)}
-                className={`flex items-center justify-between p-4 cursor-pointer transition ${
-                  selectedTrack?.trackId === track.trackId
-                    ? 'bg-brand-emerald/10 border-l-4 border-brand-emerald'
-                    : 'hover:bg-white/[0.03]'
+                className={`p-4 cursor-pointer transition-all duration-200 space-y-3 relative overflow-hidden ${
+                  isSelected ? 'border-brand-emerald/40 bg-emerald-500/[0.04]' : ''
                 }`}
               >
                 <div className="flex items-center gap-3.5 min-w-0">
-                  <span className="w-6 text-sm font-black text-slate-500 text-center flex-shrink-0">
-                    {track.rank}
-                  </span>
-                  <img
-                    src={
-                      track.coverUrl ||
-                      'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100'
-                    }
-                    alt={track.title}
-                    className="w-11 h-11 rounded-xl object-cover flex-shrink-0 ring-1 ring-white/10"
-                  />
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-white truncate">{track.title}</p>
-                    <p className="text-xs text-slate-400 truncate">
-                      {track.artistName} {track.albumTitle ? `• ${track.albumTitle}` : ''}
-                    </p>
+                  <div className="relative flex-shrink-0">
+                    <img
+                      src={
+                        track.coverUrl ||
+                        'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100'
+                      }
+                      alt={track.title}
+                      className="w-14 h-14 rounded-xl object-cover ring-1 ring-white/10 shadow-md"
+                    />
+                    <span
+                      className={`absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full border text-[10px] font-black flex items-center justify-center shadow-lg ${rankBadgeColor}`}
+                    >
+                      #{track.rank}
+                    </span>
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-bold text-white truncate">{track.title}</h3>
+                    <p className="text-xs text-slate-400 truncate mt-0.5">{track.artistName}</p>
+                    {track.albumTitle && (
+                      <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                        {track.albumTitle}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 flex-shrink-0">
-                  {track.audioFeatures && (
-                    <div className="hidden md:flex items-center gap-2">
-                      <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-slate-300">
-                        ⚡ {Math.round((track.audioFeatures.energy || 0.7) * 100)}% Energy
-                      </span>
-                      <span className="text-[10px] bg-white/5 px-2 py-0.5 rounded text-slate-300">
-                        🕺 {Math.round((track.audioFeatures.danceability || 0.6) * 100)}% Dance
-                      </span>
-                    </div>
-                  )}
+                <div className="pt-2.5 border-t border-white/[0.06] flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block">
+                      Play Count
+                    </span>
+                    <strong className="text-brand-emerald font-extrabold">{track.playCount} plays</strong>
+                  </div>
 
                   <div className="text-right">
-                    <span className="text-sm font-extrabold text-brand-emerald">
-                      {track.playCount} plays
+                    <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider block">
+                      Duration
                     </span>
-                    <span className="text-[10px] text-slate-400 block">
-                      {Math.floor(track.durationMs / 60000)}:
-                      {Math.floor((track.durationMs % 60000) / 1000)
-                        .toString()
-                        .padStart(2, '0')}
+                    <span className="text-slate-300 font-mono">
+                      {formatDuration(track.durationMs)}
                     </span>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </GlassCard>
+              </GlassCard>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
-

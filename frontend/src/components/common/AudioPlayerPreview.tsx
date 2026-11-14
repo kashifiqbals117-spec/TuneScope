@@ -6,6 +6,7 @@ interface AudioPlayerPreviewProps {
   artistName: string;
   coverUrl?: string | null;
   durationMs?: number;
+  previewUrl?: string;
 }
 
 export const AudioPlayerPreview: React.FC<AudioPlayerPreviewProps> = ({
@@ -13,6 +14,7 @@ export const AudioPlayerPreview: React.FC<AudioPlayerPreviewProps> = ({
   artistName,
   coverUrl,
   durationMs = 180000,
+  previewUrl,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
