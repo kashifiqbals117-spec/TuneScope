@@ -36,11 +36,14 @@ export function createServer() {
           env.CORS_ORIGINS.includes(origin) ||
           origin.startsWith('http://localhost:') ||
           origin.startsWith('http://127.0.0.1:') ||
-          origin.endsWith('.vercel.app')
+          origin.endsWith('.vercel.app') ||
+          origin.endsWith('.tmp.now') ||
+          origin.includes('.vercel.app') ||
+          origin.includes('.tmp.now')
         ) {
           return callback(null, true);
         }
-        return callback(new Error('CORS policy: origin not allowed.'));
+        return callback(null, false);
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
