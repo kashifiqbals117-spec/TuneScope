@@ -1,0 +1,71 @@
+name: TuneScope CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-build:
+    name: Test & Build Pipeline
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tunescope_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      PORT: 5000
+      FRONTEND_URL: http://127.0.0.1:5173
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tunescope_test?schema=public
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tunescope_test?schema=public
+      JWT_SECRET: ci-test-secret-minimum-32-characters-required-for-jwt!
+      JWT_EXPIRES_IN: 7d
+      SPOTIFY_CLIENT_ID: ci_test_spotify_client_id
+      SPOTIFY_CLIENT_SECRET: ci_test_spotify_client_secret
+      SPOTIFY_REDIRECT_URI: http://127.0.0.1:5000/api/spotify/callback
+      SPOTIFY_SCOPES: user-read-recently-played user-top-read user-read-playback-state user-read-currently-playing user-read-email user-read-private
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate --schema=backend/prisma/schema.prisma
+
+      - name: Run Prisma Database Migrations
+        run: npx prisma migrate deploy --schema=backend/prisma/schema.prisma
+
+      - name: Run Backend Tests
+        run: npm run test:backend
+
+      - name: Run Frontend Tests
+        run: npm run test:frontend
+
+      - name: Build Backend & Shared Packages
+        run: npm run build:backend
+
+      - name: Build Frontend Application
+        run: npm run build:frontend
