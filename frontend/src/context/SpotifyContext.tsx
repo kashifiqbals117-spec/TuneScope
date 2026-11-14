@@ -31,7 +31,7 @@ interface SpotifyContextType {
   error: string | null;
   checkStatus: () => Promise<SpotifyStatus | null>;
   verifyConnection: () => Promise<SpotifyStatus | null>;
-  connectSpotify: () => Promise<void>;
+  connectSpotify: (returnTo?: any) => Promise<void>;
   disconnectSpotify: () => Promise<void>;
   syncSpotify: () => Promise<{ success: boolean; ingestedCount: number; message: string }>;
 }
@@ -90,10 +90,11 @@ export const SpotifyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     checkStatus();
   }, [user]);
 
-  const connectSpotify = async () => {
+  const connectSpotify = async (returnTo?: any) => {
     try {
       setError(null);
-      const data = await apiFetch<{ url: string }>('/spotify/auth-url');
+      const target = typeof returnTo === 'string' && returnTo.startsWith('/') ? returnTo : '/profile';
+      const data = await apiFetch<{ url: string }>(`/spotify/auth-url?returnTo=${encodeURIComponent(target)}`);
       if (data.url) {
         window.location.href = data.url;
       }

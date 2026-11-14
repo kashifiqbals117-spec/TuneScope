@@ -19,7 +19,8 @@ spotifyRouter.get('/auth-url', requireAuth, (req: AuthRequest, res: Response) =>
       return;
     }
 
-    const state = JSON.stringify({ userId: req.user!.id, timestamp: Date.now() });
+    const returnTo = (req.query.returnTo as string) || '/profile';
+    const state = JSON.stringify({ userId: req.user!.id, timestamp: Date.now(), returnTo });
     const encodedState = Buffer.from(state).toString('base64url');
     const url = spotifyProvider.getAuthorizationUrl(encodedState);
 
@@ -38,14 +39,26 @@ spotifyRouter.get('/callback', async (req, res) => {
   const state = req.query.state as string;
   const error = req.query.error as string;
 
+  let returnPath = '/profile';
+  if (state) {
+    try {
+      const decoded = JSON.parse(Buffer.from(state, 'base64url').toString('utf-8'));
+      if (decoded.returnTo && typeof decoded.returnTo === 'string' && decoded.returnTo.startsWith('/')) {
+        returnPath = decoded.returnTo;
+      }
+    } catch {
+      // Handled in main try/catch block
+    }
+  }
+
   if (error) {
-    const redirectUrl = `${env.FRONTEND_URL}/settings?spotify=error&message=${encodeURIComponent(error)}`;
+    const redirectUrl = `${env.FRONTEND_URL}${returnPath}?spotify=error&message=${encodeURIComponent(error)}`;
     res.redirect(redirectUrl);
     return;
   }
 
   if (!code || !state) {
-    const redirectUrl = `${env.FRONTEND_URL}/settings?spotify=error&message=${encodeURIComponent('Missing authorization code or state')}`;
+    const redirectUrl = `${env.FRONTEND_URL}${returnPath}?spotify=error&message=${encodeURIComponent('Missing authorization code or state')}`;
     res.redirect(redirectUrl);
     return;
   }
@@ -106,14 +119,22 @@ spotifyRouter.get('/callback', async (req, res) => {
         },
       });
 
-      res.redirect(`${env.FRONTEND_URL}/settings?spotify=connected`);
+      res.redirect(`${env.FRONTEND_URL}${returnPath}?spotify=connected`);
     } catch (apiErr: any) {
       const apiStatus = apiErr.status || 500;
       let userFriendlyMessage = apiErr.message || 'Spotify verification failed';
 
-      if (apiStatus === 403 && userFriendlyMessage.includes('Active premium subscription required')) {
-        userFriendlyMessage =
-          'Spotify Developer restriction: Active Spotify Premium required for the app owner account.';
+      if (apiStatus === 403) {
+        if (userFriendlyMessage.includes('Active premium subscription required') || userFriendlyMessage.includes('premium')) {
+          userFriendlyMessage =
+            'Spotify Developer Restriction: An active Spotify Premium subscription is required for Developer Web API access.';
+        } else if (userFriendlyMessage.includes('User not registered') || userFriendlyMessage.includes('not registered')) {
+          userFriendlyMessage =
+            'Spotify Development Mode: Your Spotify account must be added under User Management in the Spotify Developer Dashboard.';
+        } else {
+          userFriendlyMessage =
+            'Spotify API Access Restricted (HTTP 403): Ensure your Spotify account is registered in User Management on the Developer Dashboard and meets Spotify Developer Policy requirements.';
+        }
       }
 
       await prisma.providerConnection.update({
@@ -122,13 +143,13 @@ spotifyRouter.get('/callback', async (req, res) => {
       });
 
       res.redirect(
-        `${env.FRONTEND_URL}/settings?spotify=restricted&message=${encodeURIComponent(userFriendlyMessage)}`
+        `${env.FRONTEND_URL}${returnPath}?spotify=restricted&message=${encodeURIComponent(userFriendlyMessage)}`
       );
     }
   } catch (err: any) {
     console.error('Spotify OAuth callback failed:', err.message);
     res.redirect(
-      `${env.FRONTEND_URL}/settings?spotify=error&message=${encodeURIComponent(err.message || 'OAuth failure')}`
+      `${env.FRONTEND_URL}${returnPath}?spotify=error&message=${encodeURIComponent(err.message || 'OAuth failure')}`
     );
   }
 });

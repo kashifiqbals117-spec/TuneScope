@@ -46,6 +46,7 @@ export const Settings: React.FC = () => {
     disconnectSpotify,
     syncSpotify,
     verifyConnection,
+    checkStatus,
   } = useSpotify();
 
   const [activeTab, setActiveTab] = useState<SettingsSection>('services');
@@ -78,6 +79,7 @@ export const Settings: React.FC = () => {
 
     if (spotifyStatus) {
       setActiveTab('services');
+      checkStatus();
     }
 
     if (spotifyStatus === 'connected') {
@@ -90,16 +92,20 @@ export const Settings: React.FC = () => {
       setFeedback({
         type: 'warning',
         message: `Spotify OAuth authorized! Credentials stored, but Spotify Web API returned HTTP 403: ${
-          message || 'Developer app owner requires an active Spotify Premium subscription.'
+          message || 'Developer app owner requires an active Spotify Premium subscription or user must be added in Developer Dashboard.'
         }`,
       });
-      toast.warning('Spotify authorized, but API requires app owner Premium subscription');
+      toast.warning('Spotify authorized, but API access is restricted (403)');
     } else if (spotifyStatus === 'error') {
       setFeedback({
         type: 'error',
         message: `Spotify authorization issue: ${message || 'Authentication was denied or timed out'}`,
       });
       toast.error('Spotify authorization was denied or cancelled');
+    }
+
+    if (spotifyStatus) {
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
@@ -389,7 +395,7 @@ export const Settings: React.FC = () => {
                 <Button
                   variant="spotify"
                   size="md"
-                  onClick={connectSpotify}
+                  onClick={() => connectSpotify('/settings')}
                   icon={<Disc3 className="w-4 h-4 fill-black" />}
                 >
                   Connect Spotify
