@@ -16,10 +16,12 @@ export const GlassCard: React.FC<GlassCardProps> = ({
 }) => {
   return (
     <div
-      className={`glass-panel rounded-2xl p-6 ${
-        hoverEffect ? 'glass-card-hover' : ''
+      className={`rounded-2xl p-6 bg-dark-900/90 border border-white/[0.07] shadow-xl backdrop-blur-sm transition-all duration-200 ${
+        hoverEffect ? 'hover:border-white/[0.14] hover:shadow-2xl hover:translate-y-[-1px]' : ''
       } ${
-        gradientBorder ? 'relative before:absolute before:inset-0 before:rounded-2xl before:p-[1px] before:bg-gradient-to-r before:from-brand-emerald/40 before:to-brand-cyan/40 before:-z-10' : ''
+        gradientBorder
+          ? 'relative before:absolute before:inset-0 before:rounded-2xl before:p-[1px] before:bg-gradient-to-r before:from-brand-emerald/30 before:to-brand-cyan/30 before:-z-10'
+          : ''
       } ${className}`}
       {...props}
     >
@@ -27,4 +29,3 @@ export const GlassCard: React.FC<GlassCardProps> = ({
     </div>
   );
 };
-
