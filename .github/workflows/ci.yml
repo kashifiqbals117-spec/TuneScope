@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  test-and-build:
+  ci:
     name: Test & Build Pipeline
     runs-on: ubuntu-latest
 
@@ -69,3 +69,14 @@ jobs:
 
       - name: Build Frontend Application
         run: npm run build:frontend
+
+  deploy:
+    runs-on: ubuntu-24.04
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          curl --fail-with-body --show-error \
+            -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
