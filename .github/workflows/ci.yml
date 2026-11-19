@@ -58,6 +58,9 @@ jobs:
       - name: Run Prisma Database Migrations
         run: npx prisma migrate deploy --schema=backend/prisma/schema.prisma
 
+      - name: Seed Database
+        run: npm run db:seed
+
       - name: Run Backend Tests
         run: npm run test:backend
 
