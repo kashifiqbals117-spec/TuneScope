@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  test-and-build:
+  ci:
     name: Test & Build Pipeline
     runs-on: ubuntu-latest
 
@@ -52,11 +52,17 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Build Shared Package
+        run: npm run build --workspace=shared
+
       - name: Generate Prisma Client
         run: npx prisma generate --schema=backend/prisma/schema.prisma
 
       - name: Run Prisma Database Migrations
         run: npx prisma migrate deploy --schema=backend/prisma/schema.prisma
+
+      - name: Seed Database
+        run: npm run db:seed
 
       - name: Run Backend Tests
         run: npm run test:backend
@@ -69,3 +75,14 @@ jobs:
 
       - name: Build Frontend Application
         run: npm run build:frontend
+
+  deploy:
+    runs-on: ubuntu-24.04
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          curl --fail-with-body --show-error \
+            -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
